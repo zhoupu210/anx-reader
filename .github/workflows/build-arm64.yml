@@ -1,7 +1,7 @@
 name: Build Windows ARM64
 
 on:
-  workflow_dispatch: # 支持在 GitHub 网页上手动点击按钮触发构建
+  workflow_dispatch:
 
 jobs:
   build:
@@ -19,7 +19,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable' # 移除固定的 3.24.x，自动采用最新的 stable
+          channel: 'stable'
           cache: true
 
       - name: Enable Windows Desktop
@@ -32,12 +32,24 @@ jobs:
         run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Build Windows ARM64 Release
-        run: flutter build windows --arm64 --release
+        env:
+          CMAKE_GENERATOR_PLATFORM: ARM64
+        run: flutter build windows --release
 
       - name: Package Build Artifacts
         shell: pwsh
         run: |
-          Compress-Archive -Path "build\windows\arm64\runner\Release\*" -DestinationPath "Anx-Reader-WinARM64.zip"
+          if (Test-Path "build\windows\arm64\runner\Release") {
+            $buildPath = "build\windows\arm64\runner\Release\*"
+          } elseif (Test-Path "build\windows\runner\Release") {
+            $buildPath = "build\windows\runner\Release\*"
+          } elseif (Test-Path "build\windows\x64\runner\Release") {
+            $buildPath = "build\windows\x64\runner\Release\*"
+          } else {
+            Write-Error "Could not find build output directory."
+            exit 1
+          }
+          Compress-Archive -Path $buildPath -DestinationPath "Anx-Reader-WinARM64.zip"
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
