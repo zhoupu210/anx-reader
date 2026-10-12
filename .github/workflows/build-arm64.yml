@@ -32,17 +32,24 @@ jobs:
         run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Build Windows ARM64 Release
-        run: flutter build windows --target-platform=windows-arm64 --release
+        shell: pwsh
+        run: |
+          # 1. 预先生成 Flutter 的 Windows 构建工程
+          flutter build windows --config-only
+
+          # 2. 调用 CMake 针对 ARM64 平台重新配置项目
+          cmake -B build/windows/arm64 -S windows -A ARM64
+
+          # 3. 执行 release 编译
+          cmake --build build/windows/arm64 --config Release
 
       - name: Package Build Artifacts
         shell: pwsh
         run: |
           if (Test-Path "build\windows\arm64\runner\Release") {
             $buildPath = "build\windows\arm64\runner\Release\*"
-          } elseif (Test-Path "build\windows\runner\Release") {
-            $buildPath = "build\windows\runner\Release\*"
           } else {
-            Write-Error "找不到 ARM64 输出目录"
+            Write-Error "找不到构建产物目录 build\windows\arm64\runner\Release"
             exit 1
           }
           Compress-Archive -Path $buildPath -DestinationPath "Anx-Reader-WinARM64.zip"
