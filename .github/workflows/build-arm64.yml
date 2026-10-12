@@ -34,22 +34,40 @@ jobs:
       - name: Prepare Windows Project & Swap ARM64 Engine
         shell: pwsh
         run: |
-          # 1. 触发预配置生成项目结构
+          # 1. 触发预配置生成项目结构与 x64 ephemeral 基础文件
           flutter build windows --config-only
 
-          # 2. 获取当前 Flutter 引擎 commit
+          # 2. 获取 Flutter 引擎 commit
           $flutterBinDir = Split-Path -Parent (Get-Command flutter).Source
           $engineVersion = (Get-Content "$flutterBinDir\internal\engine.version" -Raw).Trim()
           Write-Host "Target Engine Version: $engineVersion"
 
-          # 3. 官方 Windows-ARM64 嵌入式引擎的标准构件地址
-          $ephemeralPath = "windows\flutter\ephemeral"
+          # 3. 下载官方 ARM64 引擎压缩包
           $engineUrl = "https://storage.googleapis.com/flutter_infra_release/flutter/$engineVersion/windows-arm64/windows-arm64-embedder.zip"
           Write-Host "Downloading ARM64 Embedder from $engineUrl..."
           Invoke-WebRequest -Uri $engineUrl -OutFile "flutter-arm64-embedder.zip"
 
-          # 4. 强制解压覆盖 x64 的 flutter_windows.dll 和 flutter_windows.dll.lib
-          Expand-Archive -Path "flutter-arm64-embedder.zip" -DestinationPath $ephemeralPath -Force
+          # 4. 解压到临时目录并递归覆盖到 windows\flutter\ephemeral
+          Expand-Archive -Path "flutter-arm64-embedder.zip" -DestinationPath "temp_engine" -Force
+
+          # 查找解压出的 flutter_windows.dll.lib 与 flutter_windows.dll
+          $newLib = Get-ChildItem -Path "temp_engine" -Filter "flutter_windows.dll.lib" -Recurse | Select-Object -First 1
+          $newDll = Get-ChildItem -Path "temp_engine" -Filter "flutter_windows.dll" -Recurse | Select-Object -First 1
+
+          if ($null -eq $newLib -or $null -eq $newDll) {
+            Write-Error "未能从引擎包中找到 flutter_windows.dll.lib 或 flutter_windows.dll！"
+            exit 1
+          }
+
+          Copy-Item -Path $newLib.FullName -Destination "windows\flutter\ephemeral\flutter_windows.dll.lib" -Force
+          Copy-Item -Path $newDll.FullName -Destination "windows\flutter\ephemeral\flutter_windows.dll" -Force
+
+          # 拷贝包含的 headers 头文件（如果有的话）
+          Get-ChildItem -Path "temp_engine" -Filter "*.h" -Recurse | ForEach-Object {
+            Copy-Item -Path $_.FullName -Destination "windows\flutter\ephemeral\" -Force
+          }
+
+          Write-Host "成功替换 windows\flutter\ephemeral 下的 Flutter 引擎为 ARM64 架构！"
 
       - name: Build Windows ARM64 Release
         shell: pwsh
