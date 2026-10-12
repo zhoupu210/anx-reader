@@ -19,8 +19,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.x' # 或填 3.x / stable
-          channel: 'stable'
+          channel: 'stable' # 移除固定的 3.24.x，自动采用最新的 stable
           cache: true
 
       - name: Enable Windows Desktop
