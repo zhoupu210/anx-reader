@@ -5,7 +5,8 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    # 直接使用 GitHub 的 Windows ARM64 原生运行机
+    runs-on: windows-11-arm64
 
     steps:
       - name: Checkout Code
@@ -31,44 +32,19 @@ jobs:
       - name: Run Build Runner
         run: dart run build_runner build --delete-conflicting-outputs
 
-      - name: Prepare Windows Project & Swap ARM64 Engine
-        shell: pwsh
-        run: |
-          # 1. 生成工程初始结构与插件绑定
-          flutter build windows --config-only
-
-          # 2. 定位 flutter.bat 所在目录并准确获取 engine.version
-          $flutterBinDir = Split-Path -Parent (Get-Command flutter).Source
-          $engineVersionFile = Join-Path $flutterBinDir "internal\engine.version"
-          $engineVersion = (Get-Content $engineVersionFile -Raw).Trim()
-          Write-Host "Detected Target Engine Version: $engineVersion"
-
-          # 3. 下载 ARM64 版本的 flutter_windows.dll 等构件
-          $ephemeralPath = "windows\flutter\ephemeral"
-          $engineUrl = "https://storage.googleapis.com/flutter_infra_release/flutter/$engineVersion/windows-arm64/windows-arm64-flutter.zip"
-          Write-Host "Downloading ARM64 Engine from $engineUrl..."
-          Invoke-WebRequest -Uri $engineUrl -OutFile "flutter-arm64-engine.zip"
-
-          # 4. 强制解压覆盖 x64 的动态库及导入库
-          Expand-Archive -Path "flutter-arm64-engine.zip" -DestinationPath $ephemeralPath -Force
-
       - name: Build Windows ARM64 Release
-        shell: pwsh
-        run: |
-          # 5. 调用 CMake 并以 ARM64 目标平台生成构建工程
-          cmake -B build/windows/arm64 -S windows -A ARM64
-
-          # 6. 执行 Release 编译
-          cmake --build build/windows/arm64 --config Release
+        run: flutter build windows --release
 
       - name: Package Build Artifacts
         shell: pwsh
         run: |
+          # 原生构建下直接打包输出
           if (Test-Path "build\windows\arm64\runner\Release") {
             $buildPath = "build\windows\arm64\runner\Release\*"
+          } elseif (Test-Path "build\windows\runner\Release") {
+            $buildPath = "build\windows\runner\Release\*"
           } else {
-            Write-Error "找不到产物目录 build\windows\arm64\runner\Release"
-            exit 1
+            $buildPath = "build\windows\x64\runner\Release\*"
           }
           Compress-Archive -Path $buildPath -DestinationPath "Anx-Reader-WinARM64.zip"
 
