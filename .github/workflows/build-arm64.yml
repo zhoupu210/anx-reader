@@ -22,10 +22,12 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Enable Windows Desktop & Precache
+      - name: Enable Windows Desktop & Precache ARM64 Artifacts
+        shell: pwsh
         run: |
           flutter config --enable-windows-desktop
-          flutter precache --windows
+          # 显式下载 windows-arm64 架构所需的 Engine、gen_snapshot 与 dll
+          flutter precache --windows --target-platform=windows-arm64
 
       - name: Install Pub Dependencies
         run: flutter pub get
@@ -36,13 +38,13 @@ jobs:
       - name: Build Windows ARM64 Release
         shell: pwsh
         run: |
-          # 1. 预先生成 Flutter 插件绑定
+          # 1. 预先生成工程配置
           flutter build windows --config-only
 
-          # 2. 核心：通过 CMake 的 -A ARM64 和 -DFLUTTER_TARGET_PLATFORM 告知 Flutter 汇编器下载并解压 ARM64 引擎
+          # 2. 传入 ARM64 目标平台生成构建树
           cmake -B build/windows/arm64 -S windows -A ARM64 -DFLUTTER_TARGET_PLATFORM=windows-arm64
 
-          # 3. 编译原生 ARM64 Release
+          # 3. 执行 Release 编译
           cmake --build build/windows/arm64 --config Release
 
       - name: Package Build Artifacts
